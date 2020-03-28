@@ -9,23 +9,26 @@ debug = False
 
 from euler_angles_utils import calculate_pitch_yaw_roll
 
+
 def rotate(angle, center, landmark):
     rad = angle * np.pi / 180.0
     alpha = np.cos(rad)
     beta = np.sin(rad)
-    M = np.zeros((2,3), dtype=np.float32)
+    M = np.zeros((2, 3), dtype=np.float32)
     M[0, 0] = alpha
     M[0, 1] = beta
-    M[0, 2] = (1-alpha)*center[0] - beta*center[1]
+    M[0, 2] = (1 - alpha) * center[0] - beta * center[1]
     M[1, 0] = -beta
     M[1, 1] = alpha
-    M[1, 2] = beta*center[0] + (1-alpha)*center[1]
+    M[1, 2] = beta * center[0] + (1 - alpha) * center[1]
 
-    landmark_ = np.asarray([(M[0,0]*x+M[0,1]*y+M[0,2],
-                             M[1,0]*x+M[1,1]*y+M[1,2]) for (x,y) in landmark])
+    landmark_ = np.asarray([(M[0, 0] * x + M[0, 1] * y + M[0, 2],
+                             M[1, 0] * x + M[1, 1] * y + M[1, 2])
+                            for (x, y) in landmark])
     return M, landmark_
 
-class ImageDate():
+
+class ImageData():
     def __init__(self, line, imgDir, image_size=112):
         self.image_size = image_size
         line = line.strip().split()
@@ -37,10 +40,11 @@ class ImageDate():
         #204: 遮挡(occlusion)    0->无遮挡(no occlusion)           1->遮挡(occlusion)
         #205: 模糊(blur)         0->清晰(clear)                    1->模糊(blur)
         #206: 图片名称
-        assert(len(line) == 207)
+        assert (len(line) == 207)
         self.list = line
-        self.landmark = np.asarray(list(map(float, line[:196])), dtype=np.float32).reshape(-1, 2)
-        self.box = np.asarray(list(map(int, line[196:200])),dtype=np.int32)
+        self.landmark = np.asarray(list(map(float, line[:196])),
+                                   dtype=np.float32).reshape(-1, 2)
+        self.box = np.asarray(list(map(int, line[196:200])), dtype=np.int32)
         flag = list(map(int, line[200:206]))
         flag = list(map(bool, flag))
         self.pose = flag[0]
@@ -58,22 +62,36 @@ class ImageDate():
 
     def load_data(self, is_train, repeat, mirror=None):
         if (mirror is not None):
+            # TODO: fix load data any time load mirror file
             with open(mirror, 'r') as f:
                 lines = f.readlines()
                 assert len(lines) == 1
                 mirror_idx = lines[0].strip().split(',')
                 mirror_idx = list(map(int, mirror_idx))
-        xy = np.min(self.landmark, axis=0).astype(np.int32) 
+
+        # 左上
+        xy = np.min(self.landmark, axis=0).astype(np.int32)
+        # 右下
         zz = np.max(self.landmark, axis=0).astype(np.int32)
+        # 宽高
         wh = zz - xy + 1
 
-        center = (xy + wh/2).astype(np.int32)
+        # 中心
+        center = (xy + wh / 2).astype(np.int32)
+
         img = cv2.imread(self.path)
-        boxsize = int(np.max(wh)*1.2)
-        xy = center - boxsize//2
+
+        # 适当放大选区
+        boxsize = int(np.max(wh) * 1.2)
+
+        # 重新确定左上右下
+        xy = center - boxsize // 2
         x1, y1 = xy
         x2, y2 = xy + boxsize
+
         height, width, _ = img.shape
+
+        # 切割范围是否超出原图
         dx = max(0, -x1)
         dy = max(0, -y1)
         x1 = max(0, x1)
@@ -86,34 +104,48 @@ class ImageDate():
 
         imgT = img[y1:y2, x1:x2]
         if (dx > 0 or dy > 0 or edx > 0 or edy > 0):
-            imgT = cv2.copyMakeBorder(imgT, dy, edy, dx, edx, cv2.BORDER_CONSTANT, 0)
+            # 超出部分，切割后填充黑边
+            imgT = cv2.copyMakeBorder(imgT, dy, edy, dx, edx,
+                                      cv2.BORDER_CONSTANT, 0)
+
+        # 没找到脸？
         if imgT.shape[0] == 0 or imgT.shape[1] == 0:
             imgTT = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            for x, y in (self.landmark+0.5).astype(np.int32):
+            for x, y in (self.landmark + 0.5).astype(np.int32):
                 cv2.circle(imgTT, (x, y), 1, (0, 0, 255))
             cv2.imshow('0', imgTT)
             if cv2.waitKey(0) == 27:
                 exit()
+
         if is_train:
+            # 训练数据缩小尺寸，防止每次训练过程中才缩放
             imgT = cv2.resize(imgT, (self.image_size, self.image_size))
-        landmark = (self.landmark - xy)/boxsize
+
+        # landmark 归一化，(0~1)
+        landmark = (self.landmark - xy) / boxsize
         assert (landmark >= 0).all(), str(landmark) + str([dx, dy])
         assert (landmark <= 1).all(), str(landmark) + str([dx, dy])
+
+        # 添加数据
         self.imgs.append(imgT)
         self.landmarks.append(landmark)
 
         if is_train:
+            # 训练时，数据增强，x repeat
             while len(self.imgs) < repeat:
                 angle = np.random.randint(-20, 20)
                 cx, cy = center
-                cx = cx + int(np.random.randint(-boxsize*0.1, boxsize*0.1))
+                cx = cx + int(np.random.randint(-boxsize * 0.1, boxsize * 0.1))
                 cy = cy + int(np.random.randint(-boxsize * 0.1, boxsize * 0.1))
-                M, landmark = rotate(angle, (cx,cy), self.landmark)
+                M, landmark = rotate(angle, (cx, cy), self.landmark)
 
-                imgT = cv2.warpAffine(img, M, (int(img.shape[1]*1.1), int(img.shape[0]*1.1)))
+                imgT = cv2.warpAffine(
+                    img, M, (int(img.shape[1] * 1.1), int(img.shape[0] * 1.1)))
                 wh = np.ptp(landmark, axis=0).astype(np.int32) + 1
-                size = np.random.randint(int(np.min(wh)), np.ceil(np.max(wh) * 1.25))
-                xy = np.asarray((cx - size // 2, cy - size//2), dtype=np.int32)
+                size = np.random.randint(int(np.min(wh)),
+                                         np.ceil(np.max(wh) * 1.25))
+                xy = np.asarray((cx - size // 2, cy - size // 2),
+                                dtype=np.int32)
                 landmark = (landmark - xy) / size
                 if (landmark < 0).any() or (landmark > 1).any():
                     continue
@@ -132,45 +164,65 @@ class ImageDate():
                 y2 = min(height, y2)
 
                 imgT = imgT[y1:y2, x1:x2]
-                if (dx > 0 or dy > 0 or edx >0 or edy > 0):
-                    imgT = cv2.copyMakeBorder(imgT, dy, edy, dx, edx, cv2.BORDER_CONSTANT, 0)
+                if (dx > 0 or dy > 0 or edx > 0 or edy > 0):
+                    imgT = cv2.copyMakeBorder(imgT, dy, edy, dx, edx,
+                                              cv2.BORDER_CONSTANT, 0)
 
                 imgT = cv2.resize(imgT, (self.image_size, self.image_size))
 
                 if mirror is not None and np.random.choice((True, False)):
-                    landmark[:,0] = 1 - landmark[:,0]
+                    # 生成镜像图片
+                    landmark[:, 0] = 1 - landmark[:, 0]
                     landmark = landmark[mirror_idx]
                     imgT = cv2.flip(imgT, 1)
                 self.imgs.append(imgT)
                 self.landmarks.append(landmark)
+
     def save_data(self, path, prefix):
-        attributes = [self.pose, self.expression, self.illumination, self.make_up, self.occlusion, self.blur]
+        '''存储图片，返回标注'''
+        attributes = [
+            self.pose, self.expression, self.illumination, self.make_up,
+            self.occlusion, self.blur
+        ]
         attributes = np.asarray(attributes, dtype=np.int32)
         attributes_str = ' '.join(list(map(str, attributes)))
         labels = []
-        TRACKED_POINTS = [33, 38, 50, 46, 60, 64, 68, 72, 55, 59, 76, 82, 85, 16]
+        TRACKED_POINTS = [
+            33, 38, 50, 46, 60, 64, 68, 72, 55, 59, 76, 82, 85, 16
+        ]
         for i, (img, landmark) in enumerate(zip(self.imgs, self.landmarks)):
             assert landmark.shape == (98, 2)
-            save_path = os.path.join(path, prefix+'_'+str(i)+'.png')
+            save_path = os.path.join(path, prefix + '_' + str(i) + '.png')
             assert not os.path.exists(save_path), save_path
             cv2.imwrite(save_path, img)
 
-            
+            # 3D 角度
             euler_angles_landmark = []
             for index in TRACKED_POINTS:
-                euler_angles_landmark.append([landmark[index][0]*img.shape[0],landmark[index][1]*img.shape[1]])
-            euler_angles_landmark = np.asarray(euler_angles_landmark).reshape((-1, 28))
-            pitch, yaw, roll = calculate_pitch_yaw_roll(euler_angles_landmark[0],self.image_size,self.image_size)
+                euler_angles_landmark.append([
+                    landmark[index][0] * img.shape[0],
+                    landmark[index][1] * img.shape[1]
+                ])
+            euler_angles_landmark = np.asarray(euler_angles_landmark).reshape(
+                (-1, 28))
+            # PFLD算法重点，获取3D姿态，作为监督数据，训练时不只是提供图片
+            pitch, yaw, roll = calculate_pitch_yaw_roll(
+                euler_angles_landmark[0], self.image_size, self.image_size)
             euler_angles = np.asarray((pitch, yaw, roll), dtype=np.float32)
             euler_angles_str = ' '.join(list(map(str, euler_angles)))
 
-            landmark_str = ' '.join(list(map(str,landmark.reshape(-1).tolist())))
+            landmark_str = ' '.join(
+                list(map(str,
+                         landmark.reshape(-1).tolist())))
 
-            label = '{} {} {} {}\n'.format(save_path, landmark_str, attributes_str, euler_angles_str)
+            label = '{} {} {} {}\n'.format(save_path, landmark_str,
+                                           attributes_str, euler_angles_str)
             labels.append(label)
         return labels
+
+
 def get_dataset_list(imgDir, outDir, landmarkDir, is_train):
-    with open(landmarkDir,'r') as f:
+    with open(landmarkDir, 'r') as f:
         lines = f.readlines()
         labels = []
         save_img = os.path.join(outDir, 'imgs')
@@ -179,28 +231,39 @@ def get_dataset_list(imgDir, outDir, landmarkDir, is_train):
 
         if debug:
             lines = lines[:100]
+
+        repeat = 10
         for i, line in enumerate(lines):
-            Img = ImageDate(line, imgDir)
-            img_name = Img.path
-            Img.load_data(is_train, 10, Mirror_file)
+            my_img = ImageData(line, imgDir)
+            img_name = my_img.path
+
+            my_img.load_data(is_train, repeat, Mirror_file)
+
             _, filename = os.path.split(img_name)
             filename, _ = os.path.splitext(filename)
-            label_txt = Img.save_data(save_img, str(i)+'_' + filename)
-            labels.append(label_txt)
-            if ((i + 1) % 100) == 0:
-                print('file: {}/{}'.format(i+1, len(lines)))
 
-    with open(os.path.join(outDir, 'list.txt'),'w') as f:
+            # 生成图像，获得标注，包含三维姿态数据
+            label_txt = my_img.save_data(save_img, str(i) + '_' + filename)
+            labels.append(label_txt)
+
+            # 整体生成进度
+            if ((i + 1) % 100) == 0:
+                print('file: {}/{}'.format(i + 1, len(lines)))
+
+    with open(os.path.join(outDir, 'list.txt'), 'w') as f:
         for label in labels:
             f.writelines(label)
+
 
 if __name__ == '__main__':
     root_dir = os.path.dirname(os.path.realpath(__file__))
     imageDirs = './data/WFLW_images'
     Mirror_file = './data/Mirror98.txt'
 
-    landmarkDirs = ['./data/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt',
-                    './data/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_train.txt']
+    landmarkDirs = [
+        './data/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt',
+        './data/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_train.txt'
+    ]
 
     outDirs = ['test_data', 'train_data']
     for landmarkDir, outDir in zip(landmarkDirs, outDirs):
@@ -213,7 +276,6 @@ if __name__ == '__main__':
             is_train = False
         else:
             is_train = True
+        # 基于WFLW数据集生成训练数据和测试数据
         imgs = get_dataset_list(imageDirs, outDir, landmarkDir, is_train)
     print('end')
-
-
