@@ -12,6 +12,18 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.WARN)
 # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+
+#https://github.com/tensorflow/tensorflow/issues/24496
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    except RuntimeError as e:
+        print(e)
+
 import numpy as np
 import cv2
 from mtcnn.detect_face import MTCNN
