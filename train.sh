@@ -3,7 +3,8 @@ save_model=./models2/model4
 #pre_model=./models2/model3
 pre_model=''
 logs=./models2/log4.txt
-lr=0.000000001
+#lr=0.000000001
+lr=0.00001
 
 CUDA_VISIBLE_DEVICES='' \
 nohup python -u train_model.py --model_dir=${save_model} \

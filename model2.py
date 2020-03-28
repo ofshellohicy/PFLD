@@ -381,7 +381,7 @@ def mobilenet_v2(input, weight_decay, batch_norm_params):
 def pfld_inference(input, weight_decay, batch_norm_params):
 
     coefficient = 1
-    with tf.variable_scope('pfld_inference'):
+    with tf.compat.v1.variable_scope('pfld_inference'):
         features = {}
         with slim.arg_scope([slim.convolution2d, slim.separable_conv2d], \
                             activation_fn=tf.nn.relu6,\
@@ -732,7 +732,7 @@ def create_model(input, landmark, phase_train, args):
         'decay': 0.995,
         'epsilon': 0.001,
         'updates_collections': None,  #tf.GraphKeys.UPDATE_OPS,
-        'variables_collections': [tf.GraphKeys.TRAINABLE_VARIABLES],
+        'variables_collections': [tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES],
         'is_training': phase_train
     }
 

@@ -56,13 +56,15 @@ class Network(object):
         session: The current TensorFlow session
         ignore_missing: If true, serialized weights for missing layers are ignored.
         """
-        data_dict = np.load(data_path, encoding='latin1').item()  #pylint: disable=no-member
+        print('data path', data_path)
+        data_dict = np.load(data_path, encoding='latin1',
+                            allow_pickle=True).item()  #pylint: disable=no-member
 
         for op_name in data_dict:
-            with tf.variable_scope(op_name, reuse=True):
+            with tf.compat.v1.variable_scope(op_name, reuse=True):
                 for param_name, data in iteritems(data_dict[op_name]):
                     try:
-                        var = tf.get_variable(param_name)
+                        var = tf.compat.v1.get_variable(param_name)
                         session.run(var.assign(data))
                     except ValueError:
                         if not ignore_missing:
@@ -96,7 +98,7 @@ class Network(object):
 
     def make_var(self, name, shape):
         """Creates a new TensorFlow variable."""
-        return tf.get_variable(name, shape, trainable=self.trainable)
+        return tf.compat.v1.get_variable(name, shape, trainable=self.trainable)
 
     def validate_padding(self, padding):
         """Verifies that the padding is one of the supported ones."""
@@ -125,7 +127,7 @@ class Network(object):
         # Convolution for a given input and kernel
         convolve = lambda i, k: tf.nn.conv2d(
             i, k, [1, s_h, s_w, 1], padding=padding)
-        with tf.variable_scope(name) as scope:
+        with tf.compat.v1.variable_scope(name) as scope:
             kernel = self.make_var('weights',
                                    shape=[k_h, k_w, c_i // group, c_o])
             # This is the common-case. Convolve the input without any further complications.
@@ -141,7 +143,7 @@ class Network(object):
 
     @layer
     def prelu(self, inp, name):
-        with tf.variable_scope(name):
+        with tf.compat.v1.variable_scope(name):
             i = int(inp.get_shape()[-1])
             alpha = self.make_var('alpha', shape=(i, ))
             output = tf.nn.relu(inp) + tf.multiply(alpha, -tf.nn.relu(-inp))
@@ -150,15 +152,15 @@ class Network(object):
     @layer
     def max_pool(self, inp, k_h, k_w, s_h, s_w, name, padding='SAME'):
         self.validate_padding(padding)
-        return tf.nn.max_pool(inp,
-                              ksize=[1, k_h, k_w, 1],
-                              strides=[1, s_h, s_w, 1],
-                              padding=padding,
-                              name=name)
+        return tf.nn.max_pool2d(inp,
+                                ksize=[1, k_h, k_w, 1],
+                                strides=[1, s_h, s_w, 1],
+                                padding=padding,
+                                name=name)
 
     @layer
     def fc(self, inp, num_out, name, relu=True):
-        with tf.variable_scope(name):
+        with tf.compat.v1.variable_scope(name):
             input_shape = inp.get_shape()
             if input_shape.ndims == 4:
                 # The input is spatial. Vectorize it first.
@@ -170,7 +172,7 @@ class Network(object):
                 feed_in, dim = (inp, input_shape[-1].value)
             weights = self.make_var('weights', shape=[dim, num_out])
             biases = self.make_var('biases', [num_out])
-            op = tf.nn.relu_layer if relu else tf.nn.xw_plus_b
+            op = tf.compat.v1.nn.relu_layer if relu else tf.compat.v1.nn.xw_plus_b
             fc = op(feed_in, weights, biases, name=name)
             return fc
 
@@ -185,7 +187,7 @@ class Network(object):
         max_axis = tf.reduce_max(target, axis, keepdims=True)
         target_exp = tf.exp(target - max_axis)
         normalize = tf.reduce_sum(target_exp, axis, keepdims=True)
-        softmax = tf.div(target_exp, normalize, name)
+        softmax = tf.math.divide(target_exp, normalize, name)
         return softmax
 
 
@@ -295,16 +297,16 @@ def create_mtcnn(sess, model_path):
     if not model_path:
         model_path, _ = os.path.split(os.path.realpath(__file__))
 
-    with tf.variable_scope('pnet'):
+    with tf.compat.v1.variable_scope('pnet'):
         data = tf.compat.v1.placeholder(tf.float32, (None, None, None, 3),
                                         'input')
         pnet = PNet({'data': data})
         pnet.load(os.path.join(model_path, 'det1.npy'), sess)
-    with tf.variable_scope('rnet'):
+    with tf.compat.v1.variable_scope('rnet'):
         data = tf.compat.v1.placeholder(tf.float32, (None, 24, 24, 3), 'input')
         rnet = RNet({'data': data})
         rnet.load(os.path.join(model_path, 'det2.npy'), sess)
-    with tf.variable_scope('onet'):
+    with tf.compat.v1.variable_scope('onet'):
         data = tf.compat.v1.placeholder(tf.float32, (None, 48, 48, 3), 'input')
         onet = ONet({'data': data})
         onet.load(os.path.join(model_path, 'det3.npy'), sess)
@@ -859,8 +861,9 @@ def imresample(img, sz):
 class MTCNN:
     def __init__(self):
         with tf.Graph().as_default():
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=1.0)
-            sess = tf.Session(config=tf.ConfigProto(
+            gpu_options = tf.compat.v1.GPUOptions(
+                per_process_gpu_memory_fraction=1.0)
+            sess = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(
                 gpu_options=gpu_options, log_device_placement=False))
             with sess.as_default():
                 pnet, rnet, onet = create_mtcnn(sess, None)

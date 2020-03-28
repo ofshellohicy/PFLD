@@ -10,6 +10,8 @@ print('pid: {}     GPU: {}'.format(os.getpid(),
                                    os.environ['CUDA_VISIBLE_DEVICES']))
 
 import tensorflow as tf
+print('version', tf.__version__)
+print('path', tf.__file__)
 import numpy as np
 import cv2
 import argparse
@@ -141,19 +143,22 @@ def main(args):
         train_loss_l2 = tf.Variable(tf.constant(0.0),
                                     dtype=tf.float32,
                                     name='TrainLoss2')
-        tf.summary.scalar('test_mean_error', test_mean_error)
-        tf.summary.scalar('test_failure_rate', test_failure_rate)
-        tf.summary.scalar('test_10_loss', test_10_loss)
-        tf.summary.scalar('train_loss', train_loss)
-        tf.summary.scalar('train_loss_l2', train_loss_l2)
+        tf.compat.v1.summary.scalar('test_mean_error', test_mean_error)
+        tf.compat.v1.summary.scalar('test_failure_rate', test_failure_rate)
+        tf.compat.v1.summary.scalar('test_10_loss', test_10_loss)
+        tf.compat.v1.summary.scalar('train_loss', train_loss)
+        tf.compat.v1.summary.scalar('train_loss_l2', train_loss_l2)
 
         save_params = tf.trainable_variables()
         saver = tf.compat.v1.train.Saver(save_params, max_to_keep=None)
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.85)
+        gpu_options = tf.compat.v1.GPUOptions(
+            per_process_gpu_memory_fraction=0.85)
+        # gpu_options = tf.GPUOptions(allow_growth=True)
 
-        sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,
-                                                allow_soft_placement=False,
-                                                log_device_placement=False))
+        sess = tf.compat.v1.InteractiveSession(
+            config=tf.compat.v1.ConfigProto(gpu_options=gpu_options,
+                                            allow_soft_placement=False,
+                                            log_device_placement=False))
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
 
@@ -269,6 +274,7 @@ def test(sess, list_ops, args):
     landmark_01_num = 0
 
     epoch_size = math.ceil(list_ops['num_test_file'] * 1.0 / args.batch_size)
+    epoch_size = int(epoch_size)
     for i in range(epoch_size):  #batch_num
         images, landmarks, attributes, eulers = sess.run(
             [image_batch, landmarks_batch, attribute_batch, euler_batch])
