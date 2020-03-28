@@ -7,9 +7,11 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 print('pid: {}     GPU: {}'.format(os.getpid(),
                                    os.environ['CUDA_VISIBLE_DEVICES']))
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.WARN)
+# tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 import numpy as np
 import cv2
 from mtcnn.detect_face import MTCNN
