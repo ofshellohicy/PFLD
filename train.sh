@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-save_model=./models2/model4
+save_model=./models/model0
 #pre_model=./models2/model3
 pre_model=''
-logs=./models2/log4.txt
+logs=./models/log0.txt
 #lr=0.000000001
-lr=0.00001
+lr=0.0001
 
 CUDA_VISIBLE_DEVICES='' \
 nohup python -u train_model.py --model_dir=${save_model} \

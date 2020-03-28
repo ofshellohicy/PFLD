@@ -8,10 +8,25 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 print('pid: {}     GPU: {}'.format(os.getpid(),
                                    os.environ['CUDA_VISIBLE_DEVICES']))
-
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 print('version', tf.__version__)
 print('path', tf.__file__)
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.WARN)
+# tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+
+#https://github.com/tensorflow/tensorflow/issues/24496
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    except RuntimeError as e:
+        print(e)
+
 import numpy as np
 import cv2
 import argparse
@@ -155,7 +170,7 @@ def main(args):
             per_process_gpu_memory_fraction=0.85)
         # gpu_options = tf.GPUOptions(allow_growth=True)
 
-        sess = tf.compat.v1.InteractiveSession(
+        sess = tf.compat.v1.Session(
             config=tf.compat.v1.ConfigProto(gpu_options=gpu_options,
                                             allow_soft_placement=False,
                                             log_device_placement=False))

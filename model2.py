@@ -737,6 +737,7 @@ def create_model(input, landmark, phase_train, args):
     }
 
     landmark_dim = int(landmark.get_shape()[-1])
+    print('landmark dim', landmark_dim)
     features, landmarks_pre = pfld_inference(input, args.weight_decay,
                                              batch_norm_params)
     # loss

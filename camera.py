@@ -30,8 +30,10 @@ from mtcnn.detect_face import MTCNN
 
 
 def main():
-    meta_file = './models2/model4/model.meta'
-    ckpt_file = './models2/model4/model.ckpt-61'
+    #meta_file = './models2/model4/model.meta'
+    #ckpt_file = './models2/model4/model.ckpt-61'
+    meta_file = './models1/model_test/model.meta'
+    ckpt_file = './models1/model_test/model.ckpt-13'
     image_size = 112
     with tf.Graph().as_default():
         with tf.compat.v1.Session() as sess:
@@ -52,6 +54,10 @@ def main():
             # landmark_total = [landmark_L1, landmark_L2, landmark_L3, landmark_L4, landmark_L5]
 
             cap = cv2.VideoCapture(0)
+            cap_width = 640
+            cap_height = 480
+            cap.set(3, cap_width)
+            cap.set(4, cap_height)
             mtcnn = MTCNN()
             while True:
                 ret, image = cap.read()
@@ -66,28 +72,44 @@ def main():
                     h = y2 - y1 + 1
 
                     size = int(max([w, h]) * 1.1)
+
+                    # center point
                     cx = x1 + w // 2
                     cy = y1 + h // 2
-                    x1 = cx - size // 2
-                    x2 = x1 + size
-                    y1 = cy - size // 2
-                    y2 = y1 + size
+
+                    # square
+                    x1 = cx - size // 2  #可能为负值
+                    y1 = cy - size // 2  #可能为负值
+                    x2 = x1 + size  # 可能大于宽度
+                    y2 = y1 + size  # 可能大于宽度
 
                     dx = max(0, -x1)
                     dy = max(0, -y1)
+
                     x1 = max(0, x1)
                     y1 = max(0, y1)
 
                     edx = max(0, x2 - width)
                     edy = max(0, y2 - height)
+
                     x2 = min(width, x2)
                     y2 = min(height, y2)
 
+                    # print('box->', 'x1:', x1, 'y1:', y1, 'x2:', x2, 'y2:', y2,
+                    #       'in', 'w:', width, 'h:', height)
+
+                    # print('box->', 'top:', dy, 'bottom:', edy, 'left:', dx,
+                    #       'right:', edx, 'in', 'w:', width, 'h:', height)
+
                     cropped = image[y1:y2, x1:x2]
                     if (dx > 0 or dy > 0 or edx > 0 or edy > 0):
+                        # 当裁区域越出原图时，进行必要的黑边填充
+                        # print('padding', dy, edy, dx, edx)
                         cropped = cv2.copyMakeBorder(cropped, dy, edy, dx, edx,
                                                      cv2.BORDER_CONSTANT, 0)
+                    # 缩放到112 size
                     cropped = cv2.resize(cropped, (image_size, image_size))
+                    cv2.imshow('cropped', cropped)
 
                     input = cv2.resize(cropped, (image_size, image_size))
                     input = cv2.cvtColor(input, cv2.COLOR_BGR2RGB)
